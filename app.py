@@ -1,5 +1,18 @@
 import streamlit as st
 
+# Initialize Firebase Admin SDK
+def initialize_firebase():
+    import firebase_admin
+    from firebase_admin import credentials, firestore
+    from datetime import datetime
+    cred = credentials.Certificate("/home/maojia/work/hallucination_app/hallucination-human-eval-firebase-adminsdk-u77sb-82eeb9f363.json")
+    firebase_admin.initialize_app(cred)
+    db = firestore.client()
+    return db
+
+# Initialize Firestore
+db = initialize_firebase()
+
 def escape_markdown(text):
     import re
     # Define the characters to escape
@@ -15,39 +28,24 @@ def load_data():
         data = json.load(f)
     return data
 
-def save_responses(responses, form_number, code, name):
+def save_responses_to_firestore(responses, form_number, code, name):
     import csv
     from datetime import datetime
-
-    # Create a filename based on the form number and current date
-    filename = f"form_{name}_responses.csv"
     
-    # Check if the file exists
-    file_exists = False
-    try:
-        with open(filename, 'r'):
-            file_exists = True
-    except FileNotFoundError:
-        file_exists = False
-    
-    # Save the responses to a CSV file
-    with open(filename, 'a', newline='') as csvfile:
-        fieldnames = ['Timestamp', 'Question set', 'Rater', 'Question', 'Response']
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+    # Reference to the Firestore collection
+    collection_ref = db.collection(f'form_{form_number}_responses')
 
-        # Write the header only if the file doesn't exist
-        if not file_exists:
-            writer.writeheader()
+    # Save each response as a document
+    for question, response in responses.items():
+        doc_ref = collection_ref.document()
+        doc_ref.set({
+            'timestamp': datetime.now().isoformat(),
+            'question_set': code,
+            'rater': name,
+            'question': question,
+            'response': response
+        })
 
-        # Write each response to the file
-        for question, response in responses.items():
-            writer.writerow({
-                'Timestamp': datetime.now().isoformat(),
-                'Question set': code,
-                'Rater': name,
-                'Question': question,
-                'Response': response
-            })
 
 # Define codes that map to each form
 code_to_form = {
@@ -79,6 +77,7 @@ def main():
 def display_form(form_number, code, name):
     # Display the specific form based on form_number
     st.header(f"Set {form_number}")
+
 
     # Example: 60 questions divided into 4 forms
     data = load_data()
@@ -135,7 +134,7 @@ def display_form(form_number, code, name):
                 st.error("Please answer all questions before submitting the form.")
             else:
                 st.success("Thank you for completing the survey!")
-                save_responses(responses, form_number, code, name)
+                save_responses_to_firestore(responses, form_number, code, name)
                 # Display responses (for demonstration purposes)
                 st.write("Your responses:")
                 for q, r in responses.items():

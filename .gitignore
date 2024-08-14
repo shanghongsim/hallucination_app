@@ -163,3 +163,5 @@ cython_debug/
 
 best_model/
 best_baseline/
+config.json
+hallucination-human-eval-firebase-adminsdk-u77sb-82eeb9f363.json

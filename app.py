@@ -6,9 +6,12 @@ def initialize_firebase():
     from firebase_admin import credentials, firestore
     from datetime import datetime
     cred = credentials.Certificate("/home/maojia/work/hallucination_app/hallucination-human-eval-firebase-adminsdk-u77sb-82eeb9f363.json")
-    firebase_admin.initialize_app(cred)
-    db = firestore.client()
-    return db
+    if not firebase_admin._apps:
+        # Path to the service account key JSON file
+        firebase_admin.initialize_app(cred)
+
+    # Initialize Firestore
+    return firestore.client()
 
 # Initialize Firestore
 db = initialize_firebase()
@@ -33,7 +36,7 @@ def save_responses_to_firestore(responses, form_number, code, name):
     from datetime import datetime
     
     # Reference to the Firestore collection
-    collection_ref = db.collection(f'form_{form_number}_responses')
+    collection_ref = db.collection(f'form_{name}_responses')
 
     # Save each response as a document
     for question, response in responses.items():

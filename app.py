@@ -72,6 +72,11 @@ code_to_form = {
 }
 
 def main():
+    st.set_page_config(
+    page_icon="🚀",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
     st.title("Human Evaluation: Appropriateness of Rejection")
 
     # Prompt the user to enter their code

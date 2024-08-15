@@ -79,6 +79,19 @@ def main():
 )
     st.title("Human Evaluation: Appropriateness of Rejection")
 
+    multi = '''Thank you for participating in this human evaluation! Please review the instructions before beginning:
+
+    1. This survey consists of 15 questions and should take no more than 30 minutes to complete.
+    2. Please enter your name and the access code provided by Shang Hong in the fields below.
+    3. You will be asked to rate whether the model's output is appropriate. Use the following scale to rate each item:
+        **5** – Strongly Agree  
+        **4** – Agree  
+        **3** – Neutral  
+        **2** – Disagree  
+        **1** – Strongly Disagree
+    '''
+    st.markdown(multi)
+
     # Prompt the user to enter their code
     name = st.text_input("Enter your name:")
     code = st.text_input("Enter your access code:")
@@ -98,19 +111,6 @@ def main():
 def display_form(form_number, code, name):
     # Display the specific form based on form_number
     st.header(f"Set {form_number}")
-
-    multi = '''Thank you for participating in this human evaluation! Please review the instructions before beginning:
-
-    1. This survey consists of 15 questions and should take no more than 30 minutes to complete.
-    2. Please enter your name and the access code provided by Shang Hong in the fields below.
-    3. You will be asked to rate whether the model's output is appropriate. Use the following scale to rate each item:
-        **5** – Strongly Agree  
-        **4** – Agree  
-        **3** – Neutral  
-        **2** – Disagree  
-        **1** – Strongly Disagree
-    '''
-    st.markdown(multi)
 
     # Example: 60 questions divided into 4 forms
     data = load_data()

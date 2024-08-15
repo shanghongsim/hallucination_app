@@ -122,11 +122,12 @@ def display_form(form_number, code, name):
         responses = {}
         for i, sample in enumerate(form_questions):
             st.subheader(f"Sample {i + 1}: Please read the sample and answer the following questions carefully.")
-            st.markdown(f"**Question:** \"{escape_markdown(sample['question'])}\"")
+            
             st.markdown("**Documents:**")
             for idx, doc in enumerate(sample['docs']):
                 st.markdown(f"- **Document [{idx + 1}]** (Title: {escape_markdown(doc['title'])}): {escape_markdown(doc['text'])}")
 
+            st.markdown(f"**Question:** \"{escape_markdown(sample['question'])}\"")
             likert_options = ["5 - Strongly Disagree", "4 - Disagree", "3 - Neutral", "2 - Agree", "1 - Strongly Agree"]
 
             # First question

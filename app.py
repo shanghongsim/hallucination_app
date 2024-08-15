@@ -79,7 +79,7 @@ def main():
 )
     st.title("Human Evaluation: Appropriateness of Rejection")
 
-    multi = '''Thank you for participating in this human evaluation! Please review the instructions before beginning:
+    multi = '''Thank you for participating in this human evaluation! Please review the instructions before beginning: \n
 
     1. This survey consists of 15 questions and should take no more than 30 minutes to complete.
     2. Please enter your name and the access code provided by Shang Hong in the fields below.

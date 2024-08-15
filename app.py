@@ -99,6 +99,18 @@ def display_form(form_number, code, name):
     # Display the specific form based on form_number
     st.header(f"Set {form_number}")
 
+    multi = '''Thank you for participating in this human evaluation! Please review the instructions before beginning:
+
+    1. This survey consists of 15 questions and should take no more than 30 minutes to complete.
+    2. Please enter your name and the access code provided by Shang Hong in the fields below.
+    3. You will be asked to rate whether the model's output is appropriate. Use the following scale to rate each item:
+        **5** – Strongly Agree  
+        **4** – Agree  
+        **3** – Neutral  
+        **2** – Disagree  
+        **1** – Strongly Disagree
+    '''
+    st.markdown(multi)
 
     # Example: 60 questions divided into 4 forms
     data = load_data()
@@ -124,7 +136,7 @@ def display_form(form_number, code, name):
         responses = {}
          # Loop through each sample in the data
         for i, sample in enumerate(form_questions):
-            st.subheader(f"Sample {i + 1}:")
+            st.subheader(f"Sample {i + 1}: Given the following questions and documents, do you think the model's rejection is appropriate for Sample {i + 1}?")
             
             # Display the question
             st.markdown(f"**Question:** \"{escape_markdown(sample['question'])}\"")
@@ -138,7 +150,6 @@ def display_form(form_number, code, name):
             st.markdown(f"**Model Output:** \"{escape_markdown(sample['output'])}\"")
 
             # Likert scale question
-            st.subheader(f"Do you think that the rejection is appropriate for Sample {i + 1}?")
             likert_options = ["Strongly Agree", "Agree", "Neutral", "Disagree", "Strongly Disagree"]
             response = st.radio(f"Please select your answer for Sample {i + 1}:", likert_options, index=None, key=f"response_{i}")
 

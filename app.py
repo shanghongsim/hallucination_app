@@ -4,6 +4,13 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 from datetime import datetime
 import csv
+from nltk import sent_tokenize
+import re
+from fuzzywuzzy import fuzz
+import string
+
+REJECTION_FUZZ_THRESHOLD=85
+REJECTION_FLAG="I apologize, but I couldn't find an answer"
 
 # Initialize Firebase Admin SDK
 def initialize_firebase():
@@ -33,17 +40,13 @@ def escape_markdown(text):
     escape_chars = r'([\[\](){}*+?.\\^$|#])'
     return re.sub(escape_chars, r'\\\1', text)
 
-def load_data():
-    with open('output.json', 'r', encoding='utf-8') as f:
+def load_raw_data():
+    with open('human_eval_asqa_mix.json', 'r', encoding='utf-8') as f:
         data = json.load(f)
     return data
 
-def split_into_chunks(lst, chunk_size):
-    for i in range(0, len(lst), chunk_size):
-        yield lst[i:i + chunk_size]
-
 def save_responses_to_firestore(responses, form_number, code, name):
-    collection_ref = db.collection(f'form_{name}_responses')
+    collection_ref = db.collection(f'{name}_{code}')
     for question, response in responses.items():
         doc_ref = collection_ref.document()
         doc_ref.set({
@@ -54,37 +57,39 @@ def save_responses_to_firestore(responses, form_number, code, name):
             'response': response
         })
 
+def normalize_answer(s):
+    def remove_articles(text):
+        return re.sub(r"\b(a|an|the)\b", " ", text)
+
+    def white_space_fix(text):
+        return " ".join(text.split())
+
+    def remove_punc(text):
+        exclude = set(string.punctuation)
+        return "".join(ch for ch in text if ch not in exclude)
+
+    def lower(text):
+        return text.lower()
+
+    return white_space_fix(remove_articles(remove_punc(lower(s))))
 
 # Define codes that map to each form
-code_to_form = {
-    "1": 1,
-    "2": 2,
-    "3": 3,
-    "4": 4
-}
+code_to_form = { "1": 1, "2": 2, "3": 3, "4": 4}
 
 def main():
-    st.set_page_config(
-    page_icon="🔬",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
+    st.set_page_config(page_icon="🔬",
+                       layout="wide",
+                       initial_sidebar_state="expanded")
     st.title("Hallucination Human Evaluation")
 
     multi = """
     Thank you for participating in this human evaluation! Please review the instructions before beginning:
 
-    1. This survey includes 8 samples. It should take no more than 30 minutes to complete.
-    2. For each sample, you will see 2 answers from different models. Your task is to rate each answer based on how well it addresses the question using the provided documents.
-    3. Use the following scale to rate each item:
-    
-        **5** – Strongly Agree  
-        **4** – Agree  
-        **3** – Neutral  
-        **2** – Disagree  
-        **1** – Strongly Disagree
-    4. The answer should be based on the information provided in the documents. If the documents do not have enough information to answer the question, a refusal is a valid response.
-    5. Please enter your name and the access code provided by Shang Hong in the fields below.
+    1. This survey includes 25 samples. It should take no more than 60 minutes to complete.
+    2. For each sample, you will see two different responses to the question. Your task is to rate each answer based on how well it addresses the question using the provided documents.
+    3. The answer should be based on the information provided in the documents. If the documents do not have enough information to answer the question, a refusal is a valid response.
+    4. Full support: all of the information in the statement is supported by the citation. Partial support: some of the information in the statement is supported by the citation, but other parts are not supported (e.g., missing or contradictory). No support: the citation does not support any part of the statement (e.g., the cited webpage is completely irrelevant or contradictory).
+    4. Please enter your name and the access code provided in the fields below.
 
     Thank you for your participation!
     """
@@ -100,48 +105,77 @@ def main():
         form_number = code_to_form.get(code.upper())
 
         if form_number:
-            st.success(f"Access granted to Form {form_number}")
+            st.success(f"Access granted to set #{form_number}")
             display_form(form_number, code, name)
         else:
             st.error("Invalid code. Please enter a valid access code.")
     else:
         st.info("Please enter your access code to access the survey.")
 
-def display_form(form_number, code, name):
-    # Display the specific form based on form_number
-    st.header(f"Set {form_number}")
+def get_data(form_number, chunk_size=25):
+    raw_data = load_raw_data()
 
-    data = load_data()
-    chunk_size = 8
-    forms = list(split_into_chunks(data, chunk_size))  # List of 4 lists
+    def split_into_chunks(lst, chunk_size):
+        for i in range(0, len(lst), chunk_size):
+            yield lst[i:i + chunk_size]
+    forms = list(split_into_chunks(raw_data, chunk_size))  # List of 4 lists
 
     # Retrieve questions for the selected form
     form_index = form_number - 1  # Adjust for zero-based indexing
     form_questions = forms[form_index]  # List of 15 questions for the selected form
+    return form_questions
+
+# Display the specific form based on form_number
+def display_form(form_number, code, name):
+    st.header(f"Set #{form_number}")
+
+    data = get_data(form_number, chunk_size=25)
+    
     with st.form(key=f'form_{form_number}'):
         responses = {}
-        for i, sample in enumerate(form_questions):
-            st.subheader(f"Sample {i + 1}: Please read the sample and answer the following questions carefully.")
+        for i, sample in enumerate(data):
+            st.subheader(f"Sample {i + 1}: ")
             
-            st.markdown("**Documents:**")
+            st.markdown(f"**Question:** \"{escape_markdown(sample['question'])}\"")
             for idx, doc in enumerate(sample['docs']):
                 st.markdown(f"- **Document [{idx + 1}]** (Title: {escape_markdown(doc['title'])}): {escape_markdown(doc['text'])}")
 
-            st.markdown(f"**Question:** \"{escape_markdown(sample['question'])}\"")
-            likert_options = ["5 - Strongly Disagree", "4 - Disagree", "3 - Neutral", "2 - Agree", "1 - Strongly Agree"]
+            # likert_options = ["5 - Strongly Agree", "4 - Agree", "3 - Neutral", "2 - Disagree", "1 - Strongly Disagree"]
+            correctness_options = ["Correct", "Wrong", "Not sure"]
+            citation_recall_options = ["Full support", "No support"]
+            citation_precision_options = ["Full support", "Partial support", "No support"]
 
-            # First question
-            st.markdown(f"**Answer 1:** \"{sample['llama3_answer']}\"")
-            # st.markdown("To what extent do you agree that the answer addresses the question using the given documents? The answer should follow the information provided in the documents. Note that if the documents do not contain sufficient information to answer the question, a refusal is a valid response. Please rate your answer on a scale of 1-5:")
-            llama3_answer = st.radio(f"To what extent do you agree that the answer addresses the question using the given documents? The answer should follow the information provided in the documents. Note that if the documents do not contain sufficient information to answer the question, a refusal is a valid response. Please rate your answer on a scale of 1-5:", likert_options, index=None, key=f"response1_{i}")
+            resps = [sample['GAns'], sample['output']]
+            resps_type = ['pos', 'neg']
+            
+            output = {}
+            for resp, resp_type in zip(resps, resps_type):
+                output_temp = {}
+                st.markdown(f"**Response :** \"{resp}\"")
 
-            # Second question
-            st.markdown(f"**Answer 2:** \"{sample['gpt35_answer']}\"")
-            # st.markdown("")
-            gpt35_answer = st.radio(f"To what extent do you agree that the answer addresses the question using the given documents? The answer should follow the information provided in the documents. Note that if the documents do not contain sufficient information to answer the question, a refusal is a valid response. Please rate your answer on a scale of 1-5:", likert_options, index=None, key=f"response2_{i}")
+                correctness_rating = st.radio(f"Given the documents, the response is a correct answer to the question. You should read all five documents first to see if the response could be derived from the documents given. If the response cannot be derived, then it is necessarily also wrong. If it can be derived, then rate whether the response correctly answers the question.", correctness_options, index=None, key=f"correctness_{resp_type}_{i}")
+                output_temp['correctness'] = correctness_rating
+
+                is_rejection = fuzz.partial_ratio(normalize_answer(REJECTION_FLAG), normalize_answer(resp)) > REJECTION_FUZZ_THRESHOLD
+                if not is_rejection:
+                    sentences = sent_tokenize(resp)
+                    for sentence in sentences:
+                        citation_recall_rating = st.radio(f"{sentence} Does the set of citations support the claim?", citation_recall_options, index=None, key=f"rec_{resp_type}_{i}")
+                        output_temp['citation_recall'] = citation_recall_rating
+                        citations = re.findall(r"\[\d+\]", sentence)
+
+                        if len(citations) > 1:
+                            cleaned_sentence = re.sub(r"\[\d+\]", "", sentence).strip()
+                            cleaned_sentence = cleaned_sentence[:-1]
+                            idx = 0
+                            for cite in citations:
+                                citation_prec_rating = st.radio(f"{cleaned_sentence} {cite}. Does this INDIVIDUAL citation support the claim?", citation_precision_options, index=None, key=f"prec_{resp_type}_{idx}_{i}")
+                                output_temp[f'citation_prec_{idx}'] = citation_prec_rating
+                                idx += 1
+                output[resp_type] = output_temp
 
             st.write("---")  # Separator between samples
-            responses[f"{sample['label']}"] = {"llama3_answer": llama3_answer, "gpt35_answer": gpt35_answer}
+            responses[f"{sample['question']}"] = output
 
         # Submit button
         submitted = st.form_submit_button("Submit")
